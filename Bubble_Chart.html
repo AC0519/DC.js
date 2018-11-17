@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="EN">
+<head>
+  <meta charset="utf-8">
+  <title>Bubble Chart</title>
+  <link rel="stylesheet" type="text/css" href="dc.css" />
+  <style>
+    body, html {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    div{
+      -webkit-box-sizing: border-box;
+      -moz-box-sizing: border-box;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      font-family: helvetica;
+      font-weight: 100;
+      color: grey;
+      font-size: 20;
+    }
+
+    div#chart svg g g.axis g.tick text {
+      font-size: 15pt;
+    }
+  </style>
+</head>
+<body>
+  <h1>Bubble Chart: total payment vs. tip </h1>
+  <div id="chart"></div>
+  <script type="text/javascript" src="d3.js"></script>
+  <script type="text/javascript" src="crossfilter.js"></script>
+  <script type="text/javascript" src="dc.js"></script>
+  <script type="text/javascript" src="colorbrewer.js"></script>
+
+  <script type="text/javascript">
+
+  function print_filter(filter) {
+    var f=eval(filter);
+    if (typeof(f.length) != "undefined") {}else{}
+    if (typeof(f.top) != "undefined") {f=f.top(Infinity);}else{}
+    if (typeof(f.dimension) != "undefined") {f=f.dimension(function(d) { return "";}).top(Infinity);}else{}
+    console.log(filter+"("+f.length+") = "+JSON.stringify(f).replace("[","[\n\t").replace(/}\,/g,"},\n\t").replace("]","\n]"));
+ }
+
+  var data = [
+  {date: "2011-11-14T16:17:54Z", quantity: 2, total: 190, tip: 100, type: "tab"},
+  {date: "2011-11-14T16:20:19Z", quantity: 2, total: 190, tip: 100, type: "tab"},
+  {date: "2011-11-14T16:28:54Z", quantity: 1, total: 300, tip: 200, type: "visa"},
+  {date: "2011-11-14T16:30:43Z", quantity: 2, total: 90, tip: 0, type: "tab"},
+  {date: "2011-11-14T16:48:46Z", quantity: 2, total: 90, tip: 0, type: "tab"},
+  {date: "2011-11-14T16:53:41Z", quantity: 2, total: 90, tip: 0, type: "tab"},
+  {date: "2011-11-14T16:54:06Z", quantity: 1, total: 100, tip: 0, type: "cash"},
+  {date: "2011-11-14T16:58:03Z", quantity: 2, total: 90, tip: 0, type: "tab"},
+  {date: "2011-11-14T17:07:21Z", quantity: 2, total: 90, tip: 0, type: "tab"},
+  {date: "2011-11-14T17:22:59Z", quantity: 2, total: 90, tip: 0, type: "tab"},
+  {date: "2011-11-14T17:25:45Z", quantity: 2, total: 200, tip: 0, type: "cash"},
+  {date: "2011-11-14T17:29:52Z", quantity: 1, total: 200, tip: 100, type: "visa"}
+];
+
+
+data.forEach(function(d){
+  tempDate = new Date(d.date);
+  d.date = tempDate;
+})
+
+var facts = crossfilter(data);
+//Set dimension by type of payment
+var typeDimension = facts.dimension(function(d){ return d.type; });
+//Aggregate data by type
+var typeGroup = typeDimension.group().reduceSum(function(d){ return d.total; });
+
+var totalDimension = facts.dimension(function(d){ return d.total; });
+var totalGroup = totalDimension.group(function(d){ return Math.floor(d/100)*100; });
+
+var dateDimension = facts.dimension(function(d){ return d.date; });
+var dateGroup = dateDimension.group().reduceSum(function(d){ return d.total; });
+var dateGroupTip = dateDimension.group().reduceSum(function(d){return d.tip;});
+
+var minDate = dateDimension.bottom(1)[0].date;
+var maxDate = dateDimension.top(1)[0].date;
+
+//Scatter plot: value on x goes first in bracket followed by value on y
+var scatterDimension = facts.dimension (function(d) { return [d.total, d.tip]; });
+//basic row count group
+var scatterGroup = scatterDimension.group();
+
+var bubble = dc.bubbleChart("#chart")
+    .width(1360)
+    .height(200)
+    .margins({top:40,bottom:60,right:80,left:60})
+    .dimension(scatterDimension)
+    .group(scatterGroup)
+    // .stack(dateGroupTip, 'tip')
+    // .yAxisLabel('Transaction Spend')
+    .renderHorizontalGridLines(true)
+    .renderVerticalGridLines(true)
+    // .renderArea(true)
+    // .legend(dc.legend().x(1200).y(5).itemHeight(12).gap(5))
+    .clipPadding(70)//extends visibility beyond normal rectangle by the number of pixels specified
+
+    //When working with color keep them in this order
+    .colorAccessor(function(d){ return d.key[0]; })
+    .colors(colorbrewer.RdPu[6])
+    .colorDomain([90,300])
+
+
+    .keyAccessor(function(d){ return d.key[0]; })//returns x value
+    .valueAccessor(function(d){ return d.key[1]; })//returns y value
+    .radiusValueAccessor(function(d){ return d.value; })
+    .maxBubbleRelativeSize(0.05)//If you adjust the radius it will affect them all, this just caps the max size in relation to a normal small one
+    .yAxisLabel('Tip Size')
+    .xAxisLabel('Payment')
+    .r(d3.scale.linear().domain([1,6]))//Controls the radius of the bubble
+    .title(function(d){ return 'x: ' + d.key[0] + ', y: ' +d.key[1]; })//This tooltip checks to make sure we are getting the values we think we are
+    .y(d3.scale.linear().domain([0,200]))
+    .x(d3.scale.linear().domain([0,300]));
+    // .centerBar(true)
+    //.Units is no longer needed because we are not bucketing our data
+    //.xUnits(dc.units.fp.precision(100));
+    // .barPadding(0.2)
+    // .outerPadding(0)
+    bubble.yAxis().ticks(5);
+    // lineChart.xAxis().ticks(4);
+
+dc.renderAll();
+
+
+// console.log(dateDimension.top(1)[0].date);
+print_filter('scatterGroup');
+
+
+
+
+  </script>
+
+</body>
+
+</html>
